@@ -261,7 +261,7 @@ This same architecture pattern is used by:
 
 ## 👨‍💻 Author
 
-**Muralidharan**
+**Muralidharan M.N**
 AWS Cloud Engineer | Building real-world serverless solutions
 
 🔗[LinkedIn](https://www.linkedin.com/in/muralidharan-m-n-78a2522b8)
