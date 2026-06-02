@@ -264,9 +264,9 @@ This same architecture pattern is used by:
 **Muralidharan**
 AWS Cloud Engineer | Building real-world serverless solutions
 
-🔗 linkedin.com/in/muralidharan-m-n-78a2522b8
+🔗[LinkedIn](https://www.linkedin.com/in/muralidharan-m-n-78a2522b8)
 
-🔗 github.com/muralidharan666666-dev
+🔗 [GitHub](https://github.com/muralidharan666666-dev)
 
 ---
 
