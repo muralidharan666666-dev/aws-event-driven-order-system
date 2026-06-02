@@ -21,7 +21,7 @@ This project solves all three problems using AWS event-driven architecture:
 
 ## 🏗️ Architecture
 
-![Architecture](architecture/architecture.png)
+![Architecture](architecture.png)
 ---
 
 ## ⚡ Live Demo Flow
