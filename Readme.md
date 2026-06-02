@@ -21,37 +21,7 @@ This project solves all three problems using AWS event-driven architecture:
 
 ## 🏗️ Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  AWS Cloud — us-east-1                                          │
-│                                                                  │
-│  [Mobile App]                                                    │
-│       │                                                          │
-│       │ POST /orders                                             │
-│       ▼                                                          │
-│  [API Gateway]                                                   │
-│       │                                                          │
-│       │ Invoke                                                   │
-│       ▼                                                          │
-│  [Lambda: order-handler] ──── Instant response to customer      │
-│       │                                                          │
-│       │ Send Message                                             │
-│       ▼                                                          │
-│  [SQS: order-queue]                                              │
-│       │                                                          │
-│       │ Auto-trigger          │ After 3 failed retries           │
-│       ▼                       ▼                                  │
-│  [Lambda: order-fulfiller]  [SQS: order-dlq]                    │
-│       │                     Dead-Letter Queue                    │
-│       │ Publish                                                  │
-│       ▼                                                          │
-│  [SNS: order-notifications]                                      │
-│       │                                                          │
-│       ▼                                                          │
-│  [Customer Email] ← "Your order has been fulfilled!"            │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
+![Architecture](architecture/architecture.png)
 
 ---
 
