@@ -1,255 +1,386 @@
-# 🚀 AWS Event-Driven Order Processing System
+# AWS Event-Driven Order Processing System
 
-> A production-grade, fully serverless event-driven architecture built on AWS —
-> demonstrating real-world asynchronous order processing with automatic failure handling.
-
----
-
-## 💡 What Problem Does This Solve?
-
-In traditional systems, when a customer places an order:
-- The customer **waits** until the entire order is processed before getting a response
-- If the system crashes during processing, **the order is lost forever**
-- Scaling requires **expensive server upgrades**
-
-This project solves all three problems using AWS event-driven architecture:
-- ✅ Customer gets an **instant response** — processing happens in the background
-- ✅ **No order is ever lost** — SQS safely stores messages and DLQ captures failures
-- ✅ **Scales automatically** — serverless services handle any load without server management
+I built this project to understand how AWS services can work together
+without being directly connected to each other. Before this project,
+I did not fully understand how large applications like Swiggy or Amazon
+handle thousands of orders simultaneously without crashing. Building
+this taught me exactly how that works.
 
 ---
 
-## 🏗️ Architecture
+## Why I Built This
 
-![Architecture](architecture.png)
+I kept seeing "event-driven architecture" mentioned in AWS job descriptions
+but I did not really understand what it meant in practice. I wanted to build
+something real that would help me explain it confidently in interviews.
+
+The idea is simple — when a customer places an order:
+- They should get an instant response, not wait for the order to be processed
+- If something goes wrong during processing, the order should not disappear
+- The system should handle many orders at the same time without breaking
+
+I used AWS serverless services to solve all three of these problems.
+
 ---
 
-## ⚡ Live Demo Flow
+## What I Built
 
-```bash
-# Customer places an order
-POST https://api-id.execute-api.us-east-1.amazonaws.com/dev/orders
+An order processing system where:
 
-# Request body
+1. Customer sends an order via API
+2. System instantly confirms the order
+3. Order gets processed in the background
+4. Customer receives an email when order is fulfilled
+5. If processing fails, the order is safely stored and not lost
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  AWS Cloud — us-east-1                                          │
+│                                                                  │
+│  [Mobile App]                                                    │
+│       │                                                          │
+│       │ POST /orders                                             │
+│       ▼                                                          │
+│  [API Gateway]                                                   │
+│       │                                                          │
+│       │ Invoke                                                   │
+│       ▼                                                          │
+│  [Lambda: order-handler] ──── Instant response to customer      │
+│       │                                                          │
+│       │ Send Message                                             │
+│       ▼                                                          │
+│  [SQS: order-queue]                                              │
+│       │                                                          │
+│       │ Auto-trigger          │ After 3 failed retries           │
+│       ▼                       ▼                                  │
+│  [Lambda: order-fulfiller]  [SQS: order-dlq]                    │
+│       │                     Dead-Letter Queue                    │
+│       │ Publish                                                  │
+│       ▼                                                          │
+│  [SNS: order-notifications]                                      │
+│       │                                                          │
+│       ▼                                                          │
+│  [Customer Email]                                                │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+See `architecture.png` for the full detailed diagram with AWS icons,
+configuration details and request flow.
+
+---
+
+## AWS Services I Configured
+
+### Amazon API Gateway
+I created a REST API called `order-api` with a single POST /orders endpoint.
+This is the URL the mobile app calls to place an order.
+I deployed it to a stage called `dev`.
+
+The main thing I learned here is that API Gateway does not run any code itself —
+it just receives the request and passes it to Lambda.
+
+### AWS Lambda — order-handler
+Runtime: Python 3.12
+
+This function receives the order from API Gateway, generates a unique Order ID
+using UUID and sends the order as a message to the SQS queue.
+It then immediately returns a confirmation to the customer.
+
+I attached `AmazonSQSFullAccess` policy to this Lambda's execution role
+so it has permission to write messages to the SQS queue.
+
+One thing that confused me initially — I was wondering why SQS is not
+configured as a trigger for this Lambda. Then I understood: this Lambda
+SENDS messages to SQS, it does not RECEIVE from it. The trigger here
+is API Gateway, not SQS.
+
+### Amazon SQS — order-queue (Main Queue)
+Type: Standard Queue
+Visibility Timeout: 30 seconds
+Maximum Receives before DLQ: 3
+
+This queue sits between the two Lambda functions and holds order messages
+safely until the fulfiller Lambda processes them.
+
+I had to create the Dead-Letter Queue FIRST before creating this queue
+because this queue needs to reference the DLQ during setup.
+That order matters and I learned it the hard way.
+
+### AWS Lambda — order-fulfiller
+Runtime: Python 3.12
+Trigger: Amazon SQS (order-queue)
+Batch Size: 1
+
+This function automatically runs whenever a new message arrives in the queue.
+It processes the order and publishes a notification to SNS.
+
+I attached both `AmazonSQSFullAccess` and `AmazonSNSFullAccess` to this
+Lambda's execution role.
+
+Unlike the first Lambda which is triggered by API Gateway, this one is
+triggered directly by SQS. This is the core of what makes the system
+event-driven — the function reacts automatically to events in the queue.
+
+### Amazon SQS — order-dlq (Dead-Letter Queue)
+Type: Standard Queue
+
+This queue captures messages that failed processing after 3 retries.
+I tested this by intentionally breaking the order-fulfiller Lambda and
+confirming that after 3 retry attempts the message appeared in this queue
+instead of disappearing.
+
+This was actually one of the most interesting parts of the project because
+it showed me concretely what happens to failed messages in a real system.
+
+### Amazon SNS — order-notifications
+Type: Standard Topic
+Subscription: Email
+
+Once an order is fulfilled, this Lambda publishes a notification here
+and SNS automatically sends an email to the customer.
+
+I subscribed my own email address and confirmed the subscription by
+clicking the confirmation link AWS sent. I verified the subscription
+status showed a proper Subscription ID on the SNS console.
+
+---
+
+## Real Test Results
+
+I tested using the API Gateway built-in test tool with this request:
+
+```json
 {
     "item": "laptop",
     "quantity": 2
 }
+```
 
-# Instant response (under 1 second)
+Response I received (under 1 second):
+```json
 {
     "message": "Order placed successfully",
     "orderId": "df204d3c-7f25-4085-9583-b6353b878774"
 }
+```
 
-# 30 seconds later — customer receives email
+About 30 seconds later I received this email:
+
+```
 Subject: Order Fulfilled Successfully
-"Your order has been fulfilled!
- Order ID: df204d3c-7f25-4085-9583-b6353b878774
- Item: laptop, Quantity: 2"
+Your order has been fulfilled!
+Order ID: df204d3c-7f25-4085-9583-b6353b878774
+Item: laptop
+Quantity: 2
 ```
 
+| Test | Result |
+|---|---|
+| API returns Status 200 | ✅ Passed — 937ms response time |
+| Unique Order ID generated | ✅ Passed |
+| SQS receives message | ✅ Passed |
+| order-fulfiller triggered automatically | ✅ Passed |
+| Email notification received | ✅ Passed |
+| Failed message moves to DLQ after 3 retries | ✅ Passed |
+
 ---
 
-## 🛠️ AWS Services Used
+## AWS Configuration Details
 
-| Service | Role | Why This Service |
+| Service | Setting | Value |
 |---|---|---|
-| **Amazon API Gateway** | REST API entry point | Provides secure scalable HTTP endpoint without managing servers |
-| **AWS Lambda (order-handler)** | Receives and queues orders | Instantly responds to customer and decouples receiving from processing |
-| **Amazon SQS (order-queue)** | Message queue | Safely holds orders — never loses a message even if processor is busy |
-| **AWS Lambda (order-fulfiller)** | Processes orders | Automatically triggered by SQS — processes each order independently |
-| **Amazon SNS (order-notifications)** | Notification broadcaster | Pub/Sub pattern — one event notifies multiple subscribers simultaneously |
-| **Amazon SQS (order-dlq)** | Dead-Letter Queue | Safety net — captures failed orders after 3 retries so nothing is lost |
+| SQS order-queue | Visibility Timeout | 30 seconds |
+| SQS order-queue | Maximum Receives | 3 |
+| SQS order-queue | Dead-Letter Queue | order-dlq |
+| Lambda order-fulfiller | Batch Size | 1 |
+| Lambda order-fulfiller | Trigger | SQS order-queue |
+| API Gateway | Stage | dev |
+| API Gateway | Method | POST /orders |
+| SNS | Protocol | Email |
 
 ---
 
-## 🔑 Key Architecture Decisions & Why
+## Issues I Ran Into
 
-### Why SQS between the two Lambdas?
-> Direct Lambda-to-Lambda invocation creates **tight coupling** — if the second Lambda
-> is slow or down, the first Lambda waits or fails. SQS acts as a buffer — the first
-> Lambda drops the message and immediately returns to the customer. The second Lambda
-> picks it up when ready. This is the **core principle of event-driven architecture**.
+### Issue 1 — Email notification was not arriving
 
-### Why Dead-Letter Queue?
-> In production systems, failures happen — third-party APIs go down, databases time
-> out, network errors occur. Without a DLQ, a failed message would retry forever
-> (wasting resources) or disappear silently (losing data). The DLQ captures messages
-> that fail after 3 retries — providing an audit trail and enabling manual reprocessing.
-> **No order is ever permanently lost.**
+Everything looked like it was working. API Gateway returned Status 200,
+CloudWatch showed both Lambda functions ran successfully — but no email arrived.
 
-### Why SNS instead of direct email from Lambda?
-> If Lambda sent emails directly, adding a new notification channel (SMS, push
-> notification, Slack) would require **changing the Lambda code**. With SNS, we simply
-> add a new subscriber — **zero code changes**. This is the Open/Closed Principle
-> applied to cloud architecture.
-
-### Why Serverless?
-> Traditional servers sit idle 90% of the time wasting money. Lambda charges only
-> for actual execution time — if no orders come in, the cost is zero. During a flash
-> sale with 10,000 simultaneous orders, Lambda scales automatically —
-> **no capacity planning needed**.
-
----
-
-## ✅ Test Results
-
-| Test Scenario | Expected | Result |
-|---|---|---|
-| POST /orders with valid body | Status 200 + unique Order ID | ✅ Passed |
-| order-handler sends to SQS | Message appears in order-queue | ✅ Passed |
-| SQS triggers order-fulfiller | Lambda invoked automatically | ✅ Passed |
-| Customer receives email | Fulfillment email in inbox | ✅ Passed |
-| DLQ captures failures | Message moves to order-dlq after 3 retries | ✅ Passed |
-| Response time | Under 1 second | ✅ 937ms |
-
----
-
-## 🧠 Technical Concepts Demonstrated
+I went back to the SNS Subscriptions page and noticed something strange.
+The subscription showed:
 
 ```
-✅ Event-Driven Architecture (EDA)
-✅ Asynchronous Processing
-✅ Loose Coupling
-✅ Pub/Sub Messaging Pattern
-✅ Dead-Letter Queue (DLQ) Pattern
-✅ Serverless Computing
-✅ REST API Design
-✅ IAM Security Best Practices
-✅ Cloud Monitoring with CloudWatch
+Subscription ID : Deleted
+Status          : Confirmed
 ```
 
+The status said Confirmed but the ID said Deleted. This meant the subscription
+existed at some point but was deleted. AWS was silently failing to deliver
+emails because the endpoint no longer existed.
+
+I created a fresh subscription, immediately confirmed it from my email
+and verified the Subscription ID showed a proper ID — not Deleted.
+After that the email arrived within 30 seconds.
+
+What this taught me: A Confirmed status alone is not enough to trust.
+Always check that the Subscription ID is a real ID. Silent failures in
+notification systems are easy to miss because everything else appears
+to be working fine.
+
+### Issue 2 — AWS Console looked different from documentation
+
+When creating the Lambda function I expected to see a radio button option
+called "Create a new role with basic Lambda permissions" — which is what
+most documentation shows.
+
+Instead I saw a toggle called "Custom execution role" which opened a JSON
+policy editor when turned on.
+
+I figured out that keeping this toggle OFF does exactly the same thing as
+the old radio button — AWS automatically creates a basic execution role.
+I then manually attached the required policies to that role.
+
+This taught me that AWS Console UI changes regularly. Understanding what
+you are trying to achieve is more important than knowing where a specific
+button is.
+
 ---
 
-## 📊 Why This Architecture Scales
+## What I Learned
 
-| Scenario | Traditional Server | This Architecture |
-|---|---|---|
-| 10 orders/day | Works fine | Works fine |
-| 10,000 orders during flash sale | Server crashes or needs expensive upgrade | Scales automatically |
-| Server maintenance window | Orders lost | SQS holds messages — zero loss |
-| Processing failure | Order lost silently | DLQ captures it — zero loss |
-| Adding SMS notifications | Code change required | Add SNS subscriber — no code change |
+**About event-driven architecture:**
+Before this project I thought services had to directly call each other.
+Now I understand why SQS sitting between two Lambda functions is better —
+if the second Lambda is slow or temporarily unavailable, the first Lambda
+does not fail or wait. The message just stays in the queue until the
+second Lambda is ready.
+
+**About Dead-Letter Queues:**
+I used to think failed messages just disappear. Now I know DLQs exist
+specifically to prevent that. The fact that you have to create the DLQ
+before the main queue actually makes sense — the main queue needs to
+know where to send failures before it can be configured.
+
+**About SNS:**
+I initially wanted to send emails directly from Lambda. Then I understood
+why SNS is better — if I want to add SMS or push notifications later,
+I just add a new subscriber to the topic. No code changes needed.
+
+**About CloudWatch:**
+When the email was not arriving, CloudWatch logs were the only way to
+figure out what was actually happening inside the Lambda functions.
+I can now see exactly which orders were processed and when.
+
+**About IAM:**
+Every Lambda needs specific permissions to talk to other AWS services.
+I learned to always check what the function needs to DO and then attach
+only the policies that allow those specific actions.
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 aws-event-driven-project/
 ├── lambdas/
 │   ├── order_handler.py       # Lambda 1 — receives order, sends to SQS
-│   └── order_fulfiller.py     # Lambda 2 — processes order, sends notification
-├── architecture.md            # Detailed architecture documentation
+│   └── order_fulfiller.py     # Lambda 2 — processes order, notifies via SNS
 ├── architecture.png           # Architecture diagram with AWS icons
-└── README.md                  # You are here
+└── README.md                  # This file
 ```
 
 ---
 
-## 🚀 How to Deploy This Project
+## How to Deploy This
 
-### Prerequisites
-- AWS Account (free tier eligible)
-- IAM user with AdministratorAccess
-
-### Step 1 — Create SQS Dead-Letter Queue
+### Step 1 — Create Dead-Letter Queue first
 ```
 Service   : Amazon SQS
-Queue name: order-dlq
+Name      : order-dlq
 Type      : Standard Queue
 ```
 
-### Step 2 — Create SQS Main Queue
+### Step 2 — Create Main Queue
 ```
 Service           : Amazon SQS
-Queue name        : order-queue
+Name              : order-queue
 Type              : Standard Queue
 Dead-Letter Queue : order-dlq
-Maximum receives  : 3
+Maximum Receives  : 3
 ```
 
-### Step 3 — Create SNS Topic
+Note: Create the DLQ first. The main queue setup asks you to select
+a DLQ during configuration — it must already exist.
+
+### Step 3 — Create SNS Topic and confirm subscription
 ```
-Service     : Amazon SNS
-Topic name  : order-notifications
-Type        : Standard
-Subscription: Email → your@email.com
+Service      : Amazon SNS
+Name         : order-notifications
+Type         : Standard
+Subscription : Email
 ```
 
-### Step 4 — Deploy order-handler Lambda
+Important: After creating the subscription, immediately check your inbox
+and click the confirmation link. Also verify the Subscription ID shows
+a proper ID and not "Deleted" on the SNS console.
+
+### Step 4 — Create order-handler Lambda
 ```
 Service    : AWS Lambda
 Name       : order-handler
 Runtime    : Python 3.12
 Code       : lambdas/order_handler.py
-IAM Policy : AmazonSQSFullAccess
 ```
+After creating: Go to Configuration → Permissions → click the role name
+→ Attach AmazonSQSFullAccess policy
 
-### Step 5 — Deploy order-fulfiller Lambda
+### Step 5 — Create order-fulfiller Lambda
 ```
-Service      : AWS Lambda
-Name         : order-fulfiller
-Runtime      : Python 3.12
-Code         : lambdas/order_fulfiller.py
-Trigger      : Amazon SQS → order-queue (batch size: 1)
-IAM Policies : AmazonSQSFullAccess + AmazonSNSFullAccess
+Service    : AWS Lambda
+Name       : order-fulfiller
+Runtime    : Python 3.12
+Code       : lambdas/order_fulfiller.py
 ```
+After creating:
+- Attach AmazonSQSFullAccess and AmazonSNSFullAccess to the role
+- Add trigger: SQS → order-queue → Batch size 1
 
 ### Step 6 — Create API Gateway
 ```
-Service  : Amazon API Gateway
-API name : order-api
-Type     : REST API
-Resource : /orders
-Method   : POST → Lambda integration → order-handler
-Deploy   : Stage name = dev
+Service   : Amazon API Gateway
+Name      : order-api
+Type      : REST API
+Resource  : /orders
+Method    : POST → Lambda → order-handler
+Stage     : dev
 ```
 
 ---
 
-## 🔍 Monitoring & Observability
+## Monitoring
 
-All Lambda functions log to **Amazon CloudWatch** automatically:
+I checked Lambda execution using the Monitor tab on each function.
+CloudWatch logs showed:
 
 ```
-# Sample CloudWatch logs from order-fulfiller
 Processing order: df204d3c-7f25-4085-9583-b6353b878774
 Item: laptop, Quantity: 2
 Notification sent for order: df204d3c-7f25-4085-9583-b6353b878774
 ```
 
-Key metrics monitored:
-- Lambda Invocations count
-- Lambda Error rate
-- SQS Message count
-- SQS Dead-Letter Queue depth
+The Monitor tab also showed Invocations count and Error count which
+helped me confirm when functions were being triggered and when they
+were failing.
 
 ---
 
-## 💼 Real-World Applications
-
-This same architecture pattern is used by:
-- **Amazon** — order processing and fulfillment notifications
-- **Swiggy / Zomato** — food order processing and delivery updates
-- **Banks** — transaction processing and fraud alerts
-- **Healthcare** — appointment booking and reminder notifications
-
----
-
-## 📚 What I Learned Building This
-
-1. **Decoupling services** using SQS dramatically improves system resilience
-2. **Asynchronous processing** improves user experience — instant responses matter
-3. **Dead-Letter Queues** are not optional in production — failures always happen
-4. **SNS Pub/Sub** enables extensible notification systems without code changes
-5. **Serverless** eliminates infrastructure management and reduces costs significantly
-6. **CloudWatch logs** are essential for debugging distributed systems
-
----
-
-## 🔗 References
+## References
 
 - [AWS Event-Driven Architecture Workshop](https://catalog.workshops.aws/building-event-driven-architectures-on-aws/en-US)
 - [Amazon SQS Documentation](https://docs.aws.amazon.com/sqs)
@@ -259,15 +390,30 @@ This same architecture pattern is used by:
 
 ---
 
-## 👨‍💻 Author
+## 👨‍💻 About Me
 
-**Muralidharan M.N**
-AWS Cloud Engineer | Building real-world serverless solutions
+**Muralidharan**
+AWS re/Start Graduate | AWS Certified Cloud Practitioner
+Cloud Engineer in the Making
 
-🔗[LinkedIn](https://www.linkedin.com/in/muralidharan-m-n-78a2522b8)
+I completed the AWS re/Start program — AWS's official career
+launch program for cloud — and earned the AWS Cloud Practitioner
+certification. Since then I have spent 6 months building real
+hands-on AWS projects including this event-driven order processing
+system to go beyond what certifications teach.
 
-🔗 [GitHub](https://github.com/muralidharan666666-dev)
+I am actively looking for my first cloud role.
+I bring strong problem solving skills, genuine curiosity about
+cloud architecture and a commitment to continuous learning.
+
+🏅 AWS re/Start Graduate
+🏅 AWS Certified Cloud Practitioner
+📍 Tirunelveli, Tamil Nadu — Open to Relocation & Remote
+💼 Actively looking for Cloud Engineer | DevOps Engineer | AWS Support Engineer roles
+
+🔗 LinkedIn: https://www.linkedin.com/in/muralidharan-m-n-78a2522b8
+🔗 GitHub: https://github.com/muralidharan666666-dev
 
 ---
 
-⭐ **If you found this project useful, please give it a star!**
+⭐ If you found this project useful, feel free to star it!
