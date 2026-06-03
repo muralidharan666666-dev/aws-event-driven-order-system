@@ -374,8 +374,11 @@ hands-on AWS projects including this event-driven order processing
 system to go beyond what certifications teach.
 
 I am actively looking for my first cloud role.
-I bring strong problem solving skills, genuine curiosity about
-cloud architecture and a commitment to continuous learning.
+I am someone who questions everything — I want to understand
+not just how to configure a service but why it was designed
+that way. This project took me a full day of building and
+debugging and I learned more from the errors than from
+anything that worked first time.
 
 AWS re/Start Graduate
 AWS Certified Cloud Practitioner
