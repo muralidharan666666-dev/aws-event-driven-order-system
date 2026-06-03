@@ -381,11 +381,15 @@ debugging and I learned more from the errors than from
 anything that worked first time.
 
 AWS re/Start Graduate
+
 AWS Certified Cloud Practitioner
+
 Tirunelveli, Tamil Nadu — Open to Relocation & Remote
+
 Actively looking for Cloud Engineer | DevOps Engineer | AWS Support Engineer roles
 
 LinkedIn: https://www.linkedin.com/in/muralidharan-m-n-78a2522b8
+
 GitHub: https://github.com/muralidharan666666-dev
 
 ---
