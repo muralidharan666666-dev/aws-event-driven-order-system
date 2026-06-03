@@ -37,40 +37,11 @@ An order processing system where:
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  AWS Cloud — us-east-1                                          │
-│                                                                  │
-│  [Mobile App]                                                    │
-│       │                                                          │
-│       │ POST /orders                                             │
-│       ▼                                                          │
-│  [API Gateway]                                                   │
-│       │                                                          │
-│       │ Invoke                                                   │
-│       ▼                                                          │
-│  [Lambda: order-handler] ──── Instant response to customer      │
-│       │                                                          │
-│       │ Send Message                                             │
-│       ▼                                                          │
-│  [SQS: order-queue]                                              │
-│       │                                                          │
-│       │ Auto-trigger          │ After 3 failed retries           │
-│       ▼                       ▼                                  │
-│  [Lambda: order-fulfiller]  [SQS: order-dlq]                    │
-│       │                     Dead-Letter Queue                    │
-│       │ Publish                                                  │
-│       ▼                                                          │
-│  [SNS: order-notifications]                                      │
-│       │                                                          │
-│       ▼                                                          │
-│  [Customer Email]                                                │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
+![AWS Event-Driven Order Processing System Architecture](architecture.png)
 
-See `architecture.png` for the full detailed diagram with AWS icons,
-configuration details and request flow.
+The diagram above shows the complete flow from the mobile app through
+API Gateway, Lambda, SQS, SNS and the Dead-Letter Queue — with the
+exact AWS service configurations I used in this project.
 
 ---
 
@@ -390,9 +361,9 @@ were failing.
 
 ---
 
-## 👨‍💻 About Me
+## About Me
 
-**Muralidharan**
+**Muralidharan M.N**
 AWS re/Start Graduate | AWS Certified Cloud Practitioner
 Cloud Engineer in the Making
 
@@ -406,14 +377,14 @@ I am actively looking for my first cloud role.
 I bring strong problem solving skills, genuine curiosity about
 cloud architecture and a commitment to continuous learning.
 
-🏅 AWS re/Start Graduate
-🏅 AWS Certified Cloud Practitioner
-📍 Tirunelveli, Tamil Nadu — Open to Relocation & Remote
-💼 Actively looking for Cloud Engineer | DevOps Engineer | AWS Support Engineer roles
+AWS re/Start Graduate
+AWS Certified Cloud Practitioner
+Tirunelveli, Tamil Nadu — Open to Relocation & Remote
+Actively looking for Cloud Engineer | DevOps Engineer | AWS Support Engineer roles
 
-🔗 LinkedIn: https://www.linkedin.com/in/muralidharan-m-n-78a2522b8
-🔗 GitHub: https://github.com/muralidharan666666-dev
+LinkedIn: https://www.linkedin.com/in/muralidharan-m-n-78a2522b8
+GitHub: https://github.com/muralidharan666666-dev
 
 ---
 
-⭐ If you found this project useful, feel free to star it!
+If you found this project useful, feel free to star it!
