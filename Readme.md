@@ -178,10 +178,10 @@ Quantity: 2
 
 ## What I Learned
 
-Before this project, event-driven architecture was just a concept to me. Building this made me understand how it actually works in real life.
+**Before this project, event-driven architecture was just a concept to me. Building this made me understand how it actually works in real life.
 Every time we place an order on Swiggy or Zomato ,the app confirms it instantly without waiting for the restaurant to respond. That instant confirmation is possible because the two sides are not directly connected — there is a queue sitting between them. The app drops the order and moves on. The restaurant picks it up when it is ready. If the restaurant system is slow ,our order is still safe. The app never even knows there was a delay.
 That is exactly what I built. The first Lambda takes the order and puts it in the SQS queue. The second Lambda picks it up and processes it. They never talk to each other directly. If the second Lambda goes down the message waits in the queue and retries automatically. If it keeps failing it moves to the Dead Letter Queue so nothing is ever lost.
-Now I understand why the biggest platforms in the world use queues — not because it is more complex but because it is the only way to build something that does not break when one part has a problem.
+Now I understand why the biggest platforms in the world use queues — not because it is more complex but because it is the only way to build something that does not break when one part has a problem.**
 ---
 
 ## Project Structure
