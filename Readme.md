@@ -361,37 +361,13 @@ were failing.
 
 ---
 
-## About Me
 
-**Muralidharan M.N**
-AWS re/Start Graduate | AWS Certified Cloud Practitioner |
-Cloud Engineer in the Making
+## Author
 
-I completed the AWS re/Start program — AWS's official career
-launch program for cloud — and earned the AWS Cloud Practitioner
-certification. Since then I have spent 6 months building real
-hands-on AWS projects including this event-driven order processing
-system to go beyond what certifications teach.
+**Muralidharan M N**
 
-I am actively looking for my first cloud role.
-I am someone who questions everything — I want to understand
-not just how to configure a service but why it was designed
-that way. This project took me a full day of building and
-debugging and I learned more from the errors than from
-anything that worked first time.
-
-AWS re/Start Graduate
-
-AWS Certified Cloud Practitioner
-
-Tirunelveli, Tamil Nadu — Open to Relocation & Remote
-
-Actively looking for Cloud Engineer | DevOps Engineer | AWS Support Engineer roles
+AWS Certified Cloud Practitioner | AWS re/Start Graduate
 
 LinkedIn: https://www.linkedin.com/in/muralidharan-m-n-78a2522b8
 
 GitHub: https://github.com/muralidharan666666-dev
-
----
-
-If you found this project useful, feel free to star it!
