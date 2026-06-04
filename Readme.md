@@ -176,83 +176,12 @@ Quantity: 2
 
 ---
 
-## Issues I Ran Into
-
-### Issue 1 — Email notification was not arriving
-
-Everything looked like it was working. API Gateway returned Status 200,
-CloudWatch showed both Lambda functions ran successfully — but no email arrived.
-
-I went back to the SNS Subscriptions page and noticed something strange.
-The subscription showed:
-
-```
-Subscription ID : Deleted
-Status          : Confirmed
-```
-
-The status said Confirmed but the ID said Deleted. This meant the subscription
-existed at some point but was deleted. AWS was silently failing to deliver
-emails because the endpoint no longer existed.
-
-I created a fresh subscription, immediately confirmed it from my email
-and verified the Subscription ID showed a proper ID — not Deleted.
-After that the email arrived within 30 seconds.
-
-What this taught me: A Confirmed status alone is not enough to trust.
-Always check that the Subscription ID is a real ID. Silent failures in
-notification systems are easy to miss because everything else appears
-to be working fine.
-
-### Issue 2 — AWS Console looked different from documentation
-
-When creating the Lambda function I expected to see a radio button option
-called "Create a new role with basic Lambda permissions" — which is what
-most documentation shows.
-
-Instead I saw a toggle called "Custom execution role" which opened a JSON
-policy editor when turned on.
-
-I figured out that keeping this toggle OFF does exactly the same thing as
-the old radio button — AWS automatically creates a basic execution role.
-I then manually attached the required policies to that role.
-
-This taught me that AWS Console UI changes regularly. Understanding what
-you are trying to achieve is more important than knowing where a specific
-button is.
-
----
-
 ## What I Learned
 
-**About event-driven architecture:**
-Before this project I thought services had to directly call each other.
-Now I understand why SQS sitting between two Lambda functions is better —
-if the second Lambda is slow or temporarily unavailable, the first Lambda
-does not fail or wait. The message just stays in the queue until the
-second Lambda is ready.
-
-**About Dead-Letter Queues:**
-I used to think failed messages just disappear. Now I know DLQs exist
-specifically to prevent that. The fact that you have to create the DLQ
-before the main queue actually makes sense — the main queue needs to
-know where to send failures before it can be configured.
-
-**About SNS:**
-I initially wanted to send emails directly from Lambda. Then I understood
-why SNS is better — if I want to add SMS or push notifications later,
-I just add a new subscriber to the topic. No code changes needed.
-
-**About CloudWatch:**
-When the email was not arriving, CloudWatch logs were the only way to
-figure out what was actually happening inside the Lambda functions.
-I can now see exactly which orders were processed and when.
-
-**About IAM:**
-Every Lambda needs specific permissions to talk to other AWS services.
-I learned to always check what the function needs to DO and then attach
-only the policies that allow those specific actions.
-
+Before this project event-driven architecture was just a concept to me. Building this made me understand how it actually works in real life.
+Every time you place an order on Swiggy or Zomato the app confirms it instantly without waiting for the restaurant to respond. That instant confirmation is possible because the two sides are not directly connected — there is a queue sitting between them. The app drops the order and moves on. The restaurant picks it up when it is ready. If the restaurant system is slow your order is still safe. The app never even knows there was a delay.
+That is exactly what I built. The first Lambda takes the order and puts it in the SQS queue. The second Lambda picks it up and processes it. They never talk to each other directly. If the second Lambda goes down the message waits in the queue and retries automatically. If it keeps failing it moves to the Dead Letter Queue so nothing is ever lost.
+Now I understand why the biggest platforms in the world use queues — not because it is more complex but because it is the only way to build something that does not break when one part has a problem.
 ---
 
 ## Project Structure
