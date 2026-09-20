@@ -189,7 +189,7 @@ Now I understand why the biggest platforms in the world use queues — not becau
 ## Project Structure
 
 ```
-aws-event-driven-project/
+aws-event-driven-order-system/
 ├── lambdas/
 │   ├── order_handler.py       # Lambda 1 — receives order, sends to SQS
 │   └── order_fulfiller.py     # Lambda 2 — processes order, notifies via SNS
