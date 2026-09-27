@@ -241,6 +241,9 @@ Code       : lambdas/order_handler.py
 After creating: Go to Configuration → Permissions → click the role name
 → Attach AmazonSQSFullAccess policy
 
+Then go to Configuration → Environment variables and add
+`QUEUE_URL` = the URL of your order-queue
+
 ### Step 5 — Create order-fulfiller Lambda
 ```
 Service    : AWS Lambda
@@ -251,6 +254,8 @@ Code       : lambdas/order_fulfiller.py
 After creating:
 - Attach AmazonSQSFullAccess and AmazonSNSFullAccess to the role
 - Add trigger: SQS → order-queue → Batch size 1
+
+- Add environment variable: `SNS_TOPIC_ARN` = the ARN of your order-notifications topic
 
 ### Step 6 — Create API Gateway
 ```
