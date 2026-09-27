@@ -99,10 +99,9 @@ event-driven — the function reacts automatically to events in the queue.
 
 ### Amazon SQS — order-dlq (Dead-Letter Queue)
 Type: Standard Queue
-
-This queue captures messages that failed processing after 3 retries.
+This queue captures messages that failed processing 3 times (Maximum Receives = 3, so the first try plus 2 retries).
 I tested this by intentionally breaking the order-fulfiller Lambda and
-confirming that after 3 retry attempts the message appeared in this queue
+confirming that after 3 failed attempts the message appeared in this queue
 instead of disappearing.
 
 This was actually one of the most interesting parts of the project because
@@ -159,7 +158,7 @@ Quantity: 2
 | SQS receives message | ✅ Passed |
 | order-fulfiller triggered automatically | ✅ Passed |
 | Email notification received | ✅ Passed |
-| Failed message moves to DLQ after 3 retries | ✅ Passed |
+| Failed message moves to DLQ after 3 failed attempts | ✅ Passed |
 
 ---
 
@@ -182,7 +181,7 @@ Quantity: 2
 
 **Before this project, event-driven architecture was just a concept to me. Building this made me understand how it actually works in real life.
 Every time we place an order on Swiggy or Zomato ,the app confirms it without waiting for the restaurant to respond. That instant confirmation is possible because the two sides are not directly connected — there is a queue sitting between them. The app drops the order and moves on. The restaurant picks it up when it is ready. If the restaurant system is slow ,our order is still safe. The app never even knows there was a delay.
-That is exactly what I built. The first Lambda takes the order and puts it in the SQS queue. The second Lambda picks it up and processes it. They never talk to each other directly. If the second Lambda goes down the message waits in the queue and retries automatically. If it keeps failing it moves to the Dead Letter Queue so nothing is ever lost.
+That is exactly what I built. The first Lambda takes the order and puts it in the SQS queue. The second Lambda picks it up and processes it. They never talk to each other directly. If it keeps failing it moves to the Dead Letter Queue, where it is kept for investigation instead of disappearing (until the DLQ's retention period ends, 4 days by default).
 Now I understand why the biggest platforms in the world use queues — not because it is more complex but because it is the only way to build something that does not break when one part has a problem.**
 ---
 
@@ -279,6 +278,18 @@ Notification sent for order: df204d3c-7f25-4085-9583-b6353b878774
 The Monitor tab also showed Invocations count and Error count which
 helped me confirm when functions were being triggered and when they
 were failing.
+
+---
+
+## Known Gaps
+
+Both Lambda functions have their own separate execution roles, which is good. But the policies I attached are too broad. I used `AmazonSQSFullAccess` on order-handler, and `AmazonSQSFullAccess` plus `AmazonSNSFullAccess` on order-fulfiller. These allow actions on every queue and every topic in my account, not just the ones this project uses.
+
+Least privilege would look like this:
+- order-handler: only `sqs:SendMessage` on order-queue
+- order-fulfiller: only `sqs:ReceiveMessage`, `sqs:DeleteMessage` and `sqs:GetQueueAttributes` on order-queue, plus `sns:Publish` on the order-notifications topic
+
+I haven't changed this yet. It's the next thing I want to fix.
 
 ---
 
