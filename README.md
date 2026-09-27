@@ -31,7 +31,7 @@ An order processing system where:
 2. System instantly confirms the order
 3. Order gets processed in the background
 4. Customer receives an email when order is fulfilled
-5. If processing fails, the order is safely stored and not lost
+5. If processing keeps failing, the order is moved to a Dead-Letter Queue instead of disappearing
 
 ---
 
@@ -40,8 +40,14 @@ An order processing system where:
 ![AWS Event-Driven Order Processing System Architecture](architecture.png)
 
 The diagram above shows the complete flow from the mobile app through
-API Gateway, Lambda, SQS, SNS and the Dead-Letter Queue — with the
-exact AWS service configurations I used in this project.
+API Gateway, Lambda, SQS, SNS and the Dead-Letter Queue.
+
+A few details in the diagram don't match what I actually configured.
+Where they differ, the text in this README is correct:
+- The queue uses the default 30 second visibility timeout, not 60 seconds
+- I haven't set up a CloudWatch alarm on the DLQ yet
+- order-fulfiller doesn't validate or process the order, it only reads it and sends the notification
+- The DLQ doesn't keep messages forever, only for its retention period (4 days by default)
 
 ---
 
@@ -72,7 +78,9 @@ is API Gateway, not SQS.
 
 ### Amazon SQS — order-queue (Main Queue)
 Type: Standard Queue
+
 Visibility Timeout: 30 seconds
+
 Maximum Receives before DLQ: 3
 
 This queue sits between the two Lambda functions and holds order messages
@@ -84,11 +92,14 @@ That order matters and I learned it the hard way.
 
 ### AWS Lambda — order-fulfiller
 Runtime: Python 3.12
+
 Trigger: Amazon SQS (order-queue)
+
 Batch Size: 1
 
 This function automatically runs whenever a new message arrives in the queue.
-It processes the order and publishes a notification to SNS.
+It reads the order, logs it to CloudWatch and publishes a notification to SNS.
+There is no real processing step (like checking stock or taking payment) in this project.
 
 I attached both `AmazonSQSFullAccess` and `AmazonSNSFullAccess` to this
 Lambda's execution role.
@@ -99,16 +110,22 @@ event-driven — the function reacts automatically to events in the queue.
 
 ### Amazon SQS — order-dlq (Dead-Letter Queue)
 Type: Standard Queue
-This queue captures messages that failed processing 3 times (Maximum Receives = 3, so the first try plus 2 retries).
-I tested this by intentionally breaking the order-fulfiller Lambda and
-confirming that after 3 failed attempts the message appeared in this queue
-instead of disappearing.
 
-This was actually one of the most interesting parts of the project because
-it showed me concretely what happens to failed messages in a real system.
+This queue captures messages that failed processing 3 times (Maximum Receives = 3, so the first try plus 2 retries).
+
+I saw the retries happen by accident. While order-fulfiller had a syntax
+error in its code, the Monitor tab showed 3 invocations, all failing.
+After 3 failed attempts the message should move to this queue, but I
+didn't open order-dlq to confirm it. Re-running this test on purpose
+and checking the DLQ is on my list.
+
+Seeing the retries was actually one of the most interesting parts of the
+project because it showed me concretely what happens to failed messages
+in a real system.
 
 ### Amazon SNS — order-notifications
 Type: Standard Topic
+
 Subscription: Email
 
 Once an order is fulfilled, the Lambda publishes a notification here
@@ -136,19 +153,19 @@ I tested using the API Gateway built-in test tool with this request:
 Response I received (under 1 second):
 ```json
 {
-    "message": "Order placed successfully",
-    "orderId": "df204d3c-7f25-4085-9583-b6353b878774"
+    "statusCode": 200,
+    "body": "{\"message\": \"Order placed successfully\", \"orderId\": \"df204d3c-7f25-4085-9583-b6353b878774\"}"
 }
 ```
+
+The response comes back wrapped in `statusCode` and `body` because the POST
+method uses a plain Lambda integration, not Lambda proxy integration.
 
 About 30 seconds later I received this email:
 
 ```
 Subject: Order Fulfilled Successfully
-Your order has been fulfilled!
-Order ID: df204d3c-7f25-4085-9583-b6353b878774
-Item: laptop
-Quantity: 2
+Your order has been fulfilled! Order ID: df204d3c-7f25-4085-9583-b6353b878774, Item: laptop, Quantity: 2
 ```
 
 | Test | Result |
@@ -158,7 +175,7 @@ Quantity: 2
 | SQS receives message | ✅ Passed |
 | order-fulfiller triggered automatically | ✅ Passed |
 | Email notification received | ✅ Passed |
-| Failed message moves to DLQ after 3 failed attempts | ✅ Passed |
+| Failed message moves to DLQ after 3 failed attempts | Not verified yet — retries seen in the Monitor tab, DLQ not checked |
 
 ---
 
@@ -179,10 +196,14 @@ Quantity: 2
 
 ## What I Learned
 
-**Before this project, event-driven architecture was just a concept to me. Building this made me understand how it actually works in real life.
+Before this project, event-driven architecture was just a concept to me. Building this made me understand how it actually works in real life.
+
 Every time we place an order on Swiggy or Zomato ,the app confirms it without waiting for the restaurant to respond. That instant confirmation is possible because the two sides are not directly connected — there is a queue sitting between them. The app drops the order and moves on. The restaurant picks it up when it is ready. If the restaurant system is slow ,our order is still safe. The app never even knows there was a delay.
-That is exactly what I built. The first Lambda takes the order and puts it in the SQS queue. The second Lambda picks it up and processes it. They never talk to each other directly. If it keeps failing it moves to the Dead Letter Queue, where it is kept for investigation instead of disappearing (until the DLQ's retention period ends, 4 days by default).
-Now I understand why the biggest platforms in the world use queues — not because it is more complex but because it is the only way to build something that does not break when one part has a problem.**
+
+That is exactly what I built. The first Lambda takes the order and puts it in the SQS queue. The second Lambda picks it up and sends the notification. They never talk to each other directly. If the second Lambda goes down the message waits in the queue and retries automatically. If it keeps failing it moves to the Dead Letter Queue, where it is kept for investigation instead of disappearing (until the DLQ's retention period ends, 4 days by default).
+
+Now I understand why the biggest platforms in the world use queues — not because it is more complex but because it is the only way to build something that does not break when one part has a problem.
+
 ---
 
 ## Project Structure
@@ -191,7 +212,7 @@ Now I understand why the biggest platforms in the world use queues — not becau
 aws-event-driven-order-system/
 ├── lambdas/
 │   ├── order_handler.py       # Lambda 1 — receives order, sends to SQS
-│   └── order_fulfiller.py     # Lambda 2 — processes order, notifies via SNS
+│   └── order_fulfiller.py     # Lambda 2 — reads order, notifies via SNS
 ├── architecture.png           # Architecture diagram with AWS icons
 └── README.md                  # This file
 ```
@@ -241,8 +262,7 @@ Code       : lambdas/order_handler.py
 After creating: Go to Configuration → Permissions → click the role name
 → Attach AmazonSQSFullAccess policy
 
-Then go to Configuration → Environment variables and add
-`QUEUE_URL` = the URL of your order-queue
+Then go to Configuration → Environment variables and add `QUEUE_URL` = the URL of your order-queue
 
 ### Step 5 — Create order-fulfiller Lambda
 ```
@@ -254,7 +274,6 @@ Code       : lambdas/order_fulfiller.py
 After creating:
 - Attach AmazonSQSFullAccess and AmazonSNSFullAccess to the role
 - Add trigger: SQS → order-queue → Batch size 1
-
 - Add environment variable: `SNS_TOPIC_ARN` = the ARN of your order-notifications topic
 
 ### Step 6 — Create API Gateway
@@ -307,7 +326,6 @@ I haven't changed this yet. It's the next thing I want to fix.
 - [Amazon API Gateway Documentation](https://docs.aws.amazon.com/apigateway)
 
 ---
-
 
 ## Author
 
