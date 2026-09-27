@@ -113,15 +113,21 @@ Type: Standard Queue
 
 This queue captures messages that failed processing 3 times (Maximum Receives = 3, so the first try plus 2 retries).
 
-I saw the retries happen by accident. While order-fulfiller had a syntax
-error in its code, the Monitor tab showed 3 invocations, all failing.
-After 3 failed attempts the message should move to this queue, but I
-didn't open order-dlq to confirm it. Re-running this test on purpose
-and checking the DLQ is on my list.
+I tested this on purpose. I added one line to order-fulfiller that makes
+it fail on every order, deployed it, and sent a test order with
+`"item": "dlq-test"`. About 2 minutes later I polled order-dlq in the SQS
+console and found that exact message sitting there:
 
-Seeing the retries was actually one of the most interesting parts of the
-project because it showed me concretely what happens to failed messages
-in a real system.
+```
+{"orderId": "8084afa3-03e3-4f4b-8b32-39d67cd72ab0", "item": "dlq-test", "quantity": 1}
+```
+
+Then I removed the line, deployed again, and sent a normal order to
+confirm the email arrived like before.
+
+Seeing the failed order land in the DLQ was actually one of the most
+interesting parts of the project because it showed me concretely what
+happens to failed messages in a real system.
 
 ### Amazon SNS — order-notifications
 Type: Standard Topic
@@ -175,7 +181,7 @@ Your order has been fulfilled! Order ID: df204d3c-7f25-4085-9583-b6353b878774, I
 | SQS receives message | ✅ Passed |
 | order-fulfiller triggered automatically | ✅ Passed |
 | Email notification received | ✅ Passed |
-| Failed message moves to DLQ after 3 failed attempts | Not verified yet — retries seen in the Monitor tab, DLQ not checked |
+| Failed message moves to DLQ after 3 failed attempts | ✅ Passed — test order found in order-dlq |
 
 ---
 
