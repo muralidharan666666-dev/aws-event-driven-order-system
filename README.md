@@ -40,14 +40,8 @@ An order processing system where:
 ![AWS Event-Driven Order Processing System Architecture](architecture.png)
 
 The diagram above shows the complete flow from the mobile app through
-API Gateway, Lambda, SQS, SNS and the Dead-Letter Queue.
-
-A few details in the diagram don't match what I actually configured.
-Where they differ, the text in this README is correct:
-- The queue uses the default 30 second visibility timeout, not 60 seconds
-- I haven't set up a CloudWatch alarm on the DLQ yet
-- order-fulfiller doesn't validate or process the order, it only reads it and sends the notification
-- The DLQ doesn't keep messages forever, only for its retention period (4 days by default)
+API Gateway, Lambda, SQS, SNS and the Dead-Letter Queue, along with
+the main settings I used in this project.
 
 ---
 
