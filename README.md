@@ -331,7 +331,7 @@ I haven't changed this yet. It's the next thing I want to fix.
 
 **Muralidharan M N**
 
-AWS Certified Cloud Practitioner | AWS re/Start Graduate
+AWS Certified Cloud Practitioner | HashiCorp Certified: Terraform Associate | AWS re/Start Graduate
 
 LinkedIn: https://www.linkedin.com/in/muralidharan-m-n-78a2522b8
 
